@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { FiMenu, FiX, FiChevronDown, FiChevronUp, FiArrowRight, FiTwitter, FiFacebook, FiInstagram, FiLinkedin, FiGithub } from 'react-icons/fi';
 import { FaDiscord } from 'react-icons/fa';
-
+import { useRouter } from "next/navigation";
 interface NavItem {
   name: string;
   href: string;
@@ -11,9 +11,11 @@ interface NavItem {
 }
 
 export default function LandingLayout({ children }: { children: React.ReactNode }) {
+    const router = useRouter();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [activeSubMenu, setActiveSubMenu] = useState<string | null>(null);
   const [scrolled, setScrolled] = useState(false);
+
 
   const navItems: NavItem[] = [
     { name: 'Home', href: '#' },
@@ -22,6 +24,16 @@ export default function LandingLayout({ children }: { children: React.ReactNode 
     { name: 'FAQ', href: '#' },
     { name: 'About', href: '#' },
   ];
+
+
+
+  const handleloginClick = () => {
+    router.push("/pages/login"); 
+  };
+
+  const handleSignupCick = () => {
+    router.push("/pages/signup"); 
+  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -86,10 +98,11 @@ export default function LandingLayout({ children }: { children: React.ReactNode 
               <a
                 href="#"
                 className="px-4 py-2 text-gray-200 hover:text-[#0EA5E9] transition-colors"
-              >
+              onClick={handleloginClick} >
                 Login
               </a>
               <a
+               onClick={handleSignupCick}
                 href="#"
                 className="px-6 py-2 bg-gradient-to-r from-[#2563EB] to-[#1E40AF] text-white rounded-full hover:from-[#1E40AF] hover:to-[#2563EB] transition-all shadow-lg hover:shadow-blue-500/30"
               >
