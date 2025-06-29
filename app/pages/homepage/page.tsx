@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import Tesseract from "tesseract.js";
-import { FiUpload, FiMic, FiSend, FiCopy, FiVolume2 } from "react-icons/fi";
+import { FiUpload, FiMic, FiSend, FiCopy, FiVolume2, FiMicOff } from "react-icons/fi";
 import { BsRobot, BsPerson } from "react-icons/bs";
 
 type Message = {
@@ -9,6 +9,7 @@ type Message = {
   content: string;
   sender: "user" | "ai";
   isOCR?: boolean;
+  isVoice?: boolean;
 };
 
 export default function OCRChatInterface() {
@@ -17,9 +18,57 @@ export default function OCRChatInterface() {
   const [loading, setLoading] = useState(false);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState({
+    synthesis: false,
+    recognition: false
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+
+  // Check browser speech support
+  useEffect(() => {
+    setSpeechSupported({
+      synthesis: 'speechSynthesis' in window,
+      recognition: 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window
+    });
+
+    if ('webkitSpeechRecognition' in window) {
+      // @ts-ignore - webkit prefixed version
+      recognitionRef.current = new webkitSpeechRecognition();
+    } else if ('SpeechRecognition' in window) {
+      recognitionRef.current = new SpeechRecognition();
+    }
+
+    if (recognitionRef.current) {
+      recognitionRef.current.continuous = false;
+      recognitionRef.current.interimResults = false;
+      recognitionRef.current.lang = 'en-US';
+
+      recognitionRef.current.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        setInput(prev => prev + ' ' + transcript);
+      };
+
+      recognitionRef.current.onerror = (event) => {
+        console.error('Speech recognition error', event.error);
+        setIsListening(false);
+      };
+
+      recognitionRef.current.onend = () => {
+        setIsListening(false);
+      };
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      window.speechSynthesis.cancel();
+    };
+  }, []);
 
   // Scroll to bottom of messages
   useEffect(() => {
@@ -50,12 +99,13 @@ export default function OCRChatInterface() {
     }
   };
 
-  const addMessage = (content: string, sender: "user" | "ai", isOCR = false) => {
+  const addMessage = (content: string, sender: "user" | "ai", isOCR = false, isVoice = false) => {
     const newMessage: Message = {
       id: Date.now().toString(),
       content,
       sender,
-      isOCR
+      isOCR,
+      isVoice
     };
     setMessages(prev => [...prev, newMessage]);
   };
@@ -65,32 +115,60 @@ export default function OCRChatInterface() {
     if (!input.trim()) return;
 
     // Add user message
-    addMessage(input, "user");
+    addMessage(input, "user", false, isListening);
     setInput("");
 
     // Simulate AI response (replace with actual API call)
     setLoading(true);
     setTimeout(() => {
-      addMessage(`I received your ${input.length > 20 ? "long" : "short"} message. This would be connected to the ChatGPT API in production.`, "ai");
+      const aiResponse = `I received your ${input.length > 20 ? "long" : "short"} message. This would be connected to the ChatGPT API in production.`;
+      addMessage(aiResponse, "ai");
+      
+      // Auto-speak AI response if voice interaction was initiated
+      if (isListening) {
+        speak(aiResponse);
+      }
+      
       setLoading(false);
     }, 1000);
   };
 
-  const speak = (text: string) => {
-    if ("speechSynthesis" in window) {
-      if (isSpeaking) {
-        window.speechSynthesis.cancel();
-        setIsSpeaking(false);
-        return;
-      }
-
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.onend = () => setIsSpeaking(false);
-      window.speechSynthesis.speak(utterance);
-      setIsSpeaking(true);
+  const toggleSpeech = () => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
     } else {
-      alert("Your browser does not support speech synthesis.");
+      recognitionRef.current?.start();
+      setIsListening(true);
+      setInput(""); // Clear input for new voice input
     }
+  };
+
+  const speak = (text: string) => {
+    if (!speechSupported.synthesis) {
+      alert("Your browser doesn't support text-to-speech");
+      return;
+    }
+
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+      return;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    utterance.volume = 1;
+    
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = (event) => {
+      console.error("SpeechSynthesis error", event);
+      setIsSpeaking(false);
+    };
+
+    window.speechSynthesis.speak(utterance);
+    setIsSpeaking(true);
   };
 
   const copyToClipboard = (text: string) => {
@@ -100,8 +178,20 @@ export default function OCRChatInterface() {
   return (
     <div className="flex flex-col h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 p-4">
+      <header className="bg-white border-b border-gray-200 p-4 flex justify-between items-center">
         <h1 className="text-xl font-semibold text-gray-800">OCR Chat Assistant</h1>
+        <div className="flex items-center gap-2">
+          {speechSupported.synthesis && (
+            <button
+              onClick={() => speak(messages[messages.length - 1]?.content || "")}
+              disabled={messages.length === 0}
+              className={`p-2 rounded-full ${isSpeaking ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'} hover:bg-gray-200 transition disabled:opacity-50`}
+              title={isSpeaking ? 'Stop speaking' : 'Read last message'}
+            >
+              <FiVolume2 />
+            </button>
+          )}
+        </div>
       </header>
 
       {/* Chat Container */}
@@ -110,14 +200,25 @@ export default function OCRChatInterface() {
           <div className="flex flex-col items-center justify-center h-full text-gray-400">
             <div className="text-center max-w-md">
               <BsRobot className="mx-auto text-4xl mb-4 text-indigo-500" />
-              <h2 className="text-xl font-medium mb-2">Upload an image or type your question</h2>
+              <h2 className="text-xl font-medium mb-2">Upload an image, type, or speak your question</h2>
               <p className="mb-6">I can extract text from images and answer your questions</p>
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="flex items-center justify-center gap-2 bg-indigo-600 text-white py-2 px-6 rounded-lg hover:bg-indigo-700 transition mx-auto"
-              >
-                <FiUpload /> Upload Image
-              </button>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center justify-center gap-2 bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition"
+                >
+                  <FiUpload /> Upload
+                </button>
+                {speechSupported.recognition && (
+                  <button
+                    onClick={toggleSpeech}
+                    className={`flex items-center justify-center gap-2 py-2 px-4 rounded-lg transition ${isListening ? 'bg-red-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                  >
+                    {isListening ? <FiMicOff /> : <FiMic />}
+                    {isListening ? 'Stop' : 'Speak'}
+                  </button>
+                )}
+              </div>
               <input
                 type="file"
                 ref={fileInputRef}
@@ -153,17 +254,24 @@ export default function OCRChatInterface() {
                       OCR
                     </span>
                   )}
+                  {message.isVoice && (
+                    <span className="text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded ml-2">
+                      Voice
+                    </span>
+                  )}
                 </div>
                 <p className="whitespace-pre-line">{message.content}</p>
                 {message.sender === "ai" && (
                   <div className="flex gap-2 mt-2">
-                    <button
-                      onClick={() => speak(message.content)}
-                      className={`p-1.5 rounded-full ${isSpeaking ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'} hover:bg-gray-200 transition`}
-                      title={isSpeaking ? 'Stop reading' : 'Read aloud'}
-                    >
-                      <FiVolume2 size={14} />
-                    </button>
+                    {speechSupported.synthesis && (
+                      <button
+                        onClick={() => speak(message.content)}
+                        className={`p-1.5 rounded-full ${isSpeaking ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'} hover:bg-gray-200 transition`}
+                        title={isSpeaking ? 'Stop reading' : 'Read aloud'}
+                      >
+                        <FiVolume2 size={14} />
+                      </button>
+                    )}
                     <button
                       onClick={() => copyToClipboard(message.content)}
                       className="p-1.5 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
@@ -221,7 +329,7 @@ export default function OCRChatInterface() {
               ref={textareaRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Type your message or upload an image..."
+              placeholder={isListening ? "Listening... Speak now" : "Type your message or upload an image..."}
               className="w-full border border-gray-300 rounded-lg py-2 px-4 pr-10 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none max-h-32"
               rows={1}
               onKeyDown={(e) => {
@@ -230,11 +338,12 @@ export default function OCRChatInterface() {
                   handleSubmit(e);
                 }
               }}
+              disabled={isListening}
             />
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="absolute right-2 top-2 text-gray-400 hover:text-gray-600"
+              className="absolute right-10 top-2 text-gray-400 hover:text-gray-600"
               title="Upload image"
             >
               <FiUpload />
@@ -247,9 +356,19 @@ export default function OCRChatInterface() {
               className="hidden"
             />
           </div>
+          {speechSupported.recognition && (
+            <button
+              type="button"
+              onClick={toggleSpeech}
+              className={`p-2 rounded-lg ${isListening ? 'bg-red-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+              title={isListening ? 'Stop listening' : 'Start voice input'}
+            >
+              {isListening ? <FiMicOff /> : <FiMic />}
+            </button>
+          )}
           <button
             type="submit"
-            disabled={!input.trim() && !ocrLoading}
+            disabled={(!input.trim() && !isListening) || ocrLoading}
             className="bg-indigo-600 text-white p-2 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
           >
             <FiSend />
