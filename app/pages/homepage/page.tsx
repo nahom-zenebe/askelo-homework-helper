@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import Tesseract from "tesseract.js";
 import { FiUpload, FiMic, FiSend, FiCopy, FiVolume2, FiMicOff } from "react-icons/fi";
 import { BsRobot, BsPerson } from "react-icons/bs";
+import { IoMdClose } from "react-icons/io";
 
 type Message = {
   id: string;
@@ -10,6 +11,7 @@ type Message = {
   sender: "user" | "ai";
   isOCR?: boolean;
   isVoice?: boolean;
+  timestamp: Date;
 };
 
 export default function OCRChatInterface() {
@@ -23,10 +25,11 @@ export default function OCRChatInterface() {
     synthesis: false,
     recognition: false
   });
+  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const recognitionRef = useRef<any>(null);
 
   // Check browser speech support
   useEffect(() => {
@@ -37,9 +40,10 @@ export default function OCRChatInterface() {
 
     if ('webkitSpeechRecognition' in window) {
       // @ts-ignore - webkit prefixed version
-      recognitionRef.current = new webkitSpeechRecognition();
+      recognitionRef.current = new (window as any).webkitSpeechRecognition();
     } else if ('SpeechRecognition' in window) {
-      recognitionRef.current = new SpeechRecognition();
+      // @ts-ignore - standard version
+      recognitionRef.current = new (window as any).SpeechRecognition();
     }
 
     if (recognitionRef.current) {
@@ -47,12 +51,12 @@ export default function OCRChatInterface() {
       recognitionRef.current.interimResults = false;
       recognitionRef.current.lang = 'en-US';
 
-      recognitionRef.current.onresult = (event) => {
+      recognitionRef.current.onresult = (event: any) => {
         const transcript = event.results[0][0].transcript;
-        setInput(prev => prev + ' ' + transcript);
+        setInput(prev => prev + (prev ? ' ' : '') + transcript);
       };
 
-      recognitionRef.current.onerror = (event) => {
+      recognitionRef.current.onerror = (event: any) => {
         console.error('Speech recognition error', event.error);
         setIsListening(false);
       };
@@ -66,7 +70,7 @@ export default function OCRChatInterface() {
       if (recognitionRef.current) {
         recognitionRef.current.stop();
       }
-      window.speechSynthesis.cancel();
+      window.speechSynthesis?.cancel();
     };
   }, []);
 
@@ -87,10 +91,18 @@ export default function OCRChatInterface() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Display the uploaded image
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setUploadedImage(event.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+
     setOcrLoading(true);
     try {
       const { data: { text } } = await Tesseract.recognize(file, 'eng');
       addMessage(text, "user", true);
+      setUploadedImage(null); // Clear the image after OCR
     } catch (error) {
       console.error("OCR error:", error);
       addMessage("Failed to extract text from image.", "ai");
@@ -105,32 +117,50 @@ export default function OCRChatInterface() {
       content,
       sender,
       isOCR,
-      isVoice
+      isVoice,
+      timestamp: new Date()
     };
     setMessages(prev => [...prev, newMessage]);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
 
     // Add user message
     addMessage(input, "user", false, isListening);
+    const userInput = input;
     setInput("");
-
-    // Simulate AI response (replace with actual API call)
     setLoading(true);
-    setTimeout(() => {
-      const aiResponse = `I received your ${input.length > 20 ? "long" : "short"} message. This would be connected to the ChatGPT API in production.`;
-      addMessage(aiResponse, "ai");
+
+    try {
+      // Simulate AI response (replace with actual API call)
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      // Auto-speak AI response if voice interaction was initiated
-      if (isListening) {
-        speak(aiResponse);
-      }
+      // This is where you would call your actual API
+      // const response = await fetch('/api/ask-ai', {
+      //   method: 'POST',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify({ message: userInput })
+      // });
+      // const data = await response.json();
       
+      // For demo purposes, we'll just return a mock response
+      const mockResponses = [
+        "I've analyzed the text you provided. Here's what I found...",
+        "Based on the content, I can tell you that...",
+        "The extracted text contains several key points...",
+        "This appears to be a document about..."
+      ];
+      const randomResponse = mockResponses[Math.floor(Math.random() * mockResponses.length)];
+      
+      addMessage(randomResponse, "ai");
+    } catch (error) {
+      console.error("AI error:", error);
+      addMessage("Sorry, I encountered an error processing your request.", "ai");
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
 
   const toggleSpeech = () => {
@@ -175,11 +205,22 @@ export default function OCRChatInterface() {
     navigator.clipboard.writeText(text);
   };
 
+  const formatTime = (date: Date) => {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const clearUploadedImage = () => {
+    setUploadedImage(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
+    <div className="flex flex-col h-screen bg-[#f7f7f8]">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 p-4 flex justify-between items-center">
-        <h1 className="text-xl font-semibold text-gray-800">OCR Chat Assistant</h1>
+        <h1 className="text-xl font-semibold text-gray-800">DeepSeek OCR</h1>
         <div className="flex items-center gap-2">
           {speechSupported.synthesis && (
             <button
@@ -199,20 +240,23 @@ export default function OCRChatInterface() {
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-gray-400">
             <div className="text-center max-w-md">
-              <BsRobot className="mx-auto text-4xl mb-4 text-indigo-500" />
-              <h2 className="text-xl font-medium mb-2">Upload an image, type, or speak your question</h2>
-              <p className="mb-6">I can extract text from images and answer your questions</p>
+              <div className="relative w-16 h-16 mx-auto mb-4">
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full opacity-80"></div>
+                <BsRobot className="absolute inset-0 m-auto text-2xl text-white" />
+              </div>
+              <h2 className="text-xl font-medium mb-2 text-gray-700">Upload an image or ask a question</h2>
+              <p className="mb-6 text-gray-500">I can extract text from images and answer your questions with AI</p>
               <div className="flex gap-3 justify-center">
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="flex items-center justify-center gap-2 bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition"
+                  className="flex items-center justify-center gap-2 bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition shadow-md"
                 >
-                  <FiUpload /> Upload
+                  <FiUpload /> Upload Image
                 </button>
                 {speechSupported.recognition && (
                   <button
                     onClick={toggleSpeech}
-                    className={`flex items-center justify-center gap-2 py-2 px-4 rounded-lg transition ${isListening ? 'bg-red-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                    className={`flex items-center justify-center gap-2 py-2 px-4 rounded-lg transition shadow-md ${isListening ? 'bg-red-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
                   >
                     {isListening ? <FiMicOff /> : <FiMic />}
                     {isListening ? 'Stop' : 'Speak'}
@@ -235,34 +279,41 @@ export default function OCRChatInterface() {
               className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}
             >
               <div
-                className={`max-w-3xl rounded-lg p-4 ${message.sender === "user"
+                className={`max-w-3xl rounded-lg p-4 relative ${message.sender === "user"
                   ? "bg-indigo-600 text-white"
                   : "bg-white border border-gray-200"
-                  }`}
+                  } shadow-sm`}
               >
                 <div className="flex items-center gap-2 mb-1">
                   {message.sender === "user" ? (
-                    <BsPerson className="flex-shrink-0" />
+                    <div className="w-6 h-6 rounded-full bg-indigo-500 flex items-center justify-center">
+                      <BsPerson className="text-white text-sm" />
+                    </div>
                   ) : (
-                    <BsRobot className="flex-shrink-0 text-indigo-500" />
+                    <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+                      <BsRobot className="text-white text-sm" />
+                    </div>
                   )}
                   <span className="font-medium">
-                    {message.sender === "user" ? "You" : "Assistant"}
+                    {message.sender === "user" ? "You" : "DeepSeek"}
+                  </span>
+                  <span className="text-xs opacity-70 ml-2">
+                    {formatTime(message.timestamp)}
                   </span>
                   {message.isOCR && (
-                    <span className="text-xs bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded ml-2">
+                    <span className="text-xs bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded ml-auto">
                       OCR
                     </span>
                   )}
                   {message.isVoice && (
-                    <span className="text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded ml-2">
+                    <span className="text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded ml-auto">
                       Voice
                     </span>
                   )}
                 </div>
-                <p className="whitespace-pre-line">{message.content}</p>
+                <p className="whitespace-pre-line mt-2">{message.content}</p>
                 {message.sender === "ai" && (
-                  <div className="flex gap-2 mt-2">
+                  <div className="flex gap-2 mt-3 justify-end">
                     {speechSupported.synthesis && (
                       <button
                         onClick={() => speak(message.content)}
@@ -285,32 +336,54 @@ export default function OCRChatInterface() {
             </div>
           ))
         )}
+        {uploadedImage && (
+          <div className="flex justify-end">
+            <div className="max-w-xs rounded-lg overflow-hidden relative shadow-md">
+              <img src={uploadedImage} alt="Uploaded preview" className="w-full h-auto" />
+              <div className="absolute top-2 right-2 bg-black bg-opacity-50 rounded-full p-1">
+                <button 
+                  onClick={clearUploadedImage}
+                  className="text-white hover:text-gray-200"
+                >
+                  <IoMdClose />
+                </button>
+              </div>
+              <div className="bg-indigo-600 text-white text-xs p-2 text-center">
+                Processing image...
+              </div>
+            </div>
+          </div>
+        )}
         {loading && (
           <div className="flex justify-start">
-            <div className="max-w-3xl rounded-lg p-4 bg-white border border-gray-200">
+            <div className="max-w-3xl rounded-lg p-4 bg-white border border-gray-200 shadow-sm">
               <div className="flex items-center gap-2">
-                <BsRobot className="text-indigo-500" />
-                <span className="font-medium">Assistant</span>
+                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+                  <BsRobot className="text-white text-sm" />
+                </div>
+                <span className="font-medium">DeepSeek</span>
               </div>
-              <div className="flex space-x-2 mt-2">
-                <div className="w-2 h-2 rounded-full bg-gray-300 animate-bounce"></div>
-                <div className="w-2 h-2 rounded-full bg-gray-300 animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                <div className="w-2 h-2 rounded-full bg-gray-300 animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+              <div className="flex space-x-2 mt-3">
+                <div className="w-2 h-2 rounded-full bg-indigo-300 animate-bounce"></div>
+                <div className="w-2 h-2 rounded-full bg-indigo-300 animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                <div className="w-2 h-2 rounded-full bg-indigo-300 animate-bounce" style={{ animationDelay: '0.4s' }}></div>
               </div>
             </div>
           </div>
         )}
         {ocrLoading && (
           <div className="flex justify-end">
-            <div className="max-w-3xl rounded-lg p-4 bg-indigo-600 text-white">
+            <div className="max-w-3xl rounded-lg p-4 bg-indigo-600 text-white shadow-sm">
               <div className="flex items-center gap-2">
-                <BsPerson />
+                <div className="w-6 h-6 rounded-full bg-indigo-500 flex items-center justify-center">
+                  <BsPerson className="text-white text-sm" />
+                </div>
                 <span className="font-medium">You</span>
-                <span className="text-xs bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded ml-2">
-                  OCR Processing
+                <span className="text-xs bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded ml-auto">
+                  Processing Image
                 </span>
               </div>
-              <div className="flex space-x-2 mt-2">
+              <div className="flex space-x-2 mt-3">
                 <div className="w-2 h-2 rounded-full bg-indigo-300 animate-bounce"></div>
                 <div className="w-2 h-2 rounded-full bg-indigo-300 animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                 <div className="w-2 h-2 rounded-full bg-indigo-300 animate-bounce" style={{ animationDelay: '0.4s' }}></div>
@@ -330,7 +403,7 @@ export default function OCRChatInterface() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder={isListening ? "Listening... Speak now" : "Type your message or upload an image..."}
-              className="w-full border border-gray-300 rounded-lg py-2 px-4 pr-10 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none max-h-32"
+              className="w-full border border-gray-300 rounded-lg py-3 px-4 pr-10 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none max-h-32 bg-white shadow-sm"
               rows={1}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
@@ -343,7 +416,7 @@ export default function OCRChatInterface() {
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="absolute right-10 top-2 text-gray-400 hover:text-gray-600"
+              className="absolute right-10 top-3 text-gray-400 hover:text-gray-600"
               title="Upload image"
             >
               <FiUpload />
@@ -360,18 +433,18 @@ export default function OCRChatInterface() {
             <button
               type="button"
               onClick={toggleSpeech}
-              className={`p-2 rounded-lg ${isListening ? 'bg-red-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+              className={`p-3 rounded-lg flex items-center justify-center ${isListening ? 'bg-red-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'} shadow-sm`}
               title={isListening ? 'Stop listening' : 'Start voice input'}
             >
-              {isListening ? <FiMicOff /> : <FiMic />}
+              {isListening ? <FiMicOff size={18} /> : <FiMic size={18} />}
             </button>
           )}
           <button
             type="submit"
-            disabled={(!input.trim() && !isListening) || ocrLoading}
-            className="bg-indigo-600 text-white p-2 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+            disabled={(!input.trim() && !isListening) || loading || ocrLoading}
+            className="bg-indigo-600 text-white p-3 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-md flex items-center justify-center"
           >
-            <FiSend />
+            <FiSend size={18} />
           </button>
         </form>
       </div>

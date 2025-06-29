@@ -14,8 +14,21 @@ model User {
   image         String?  
   createdAt     DateTime  @default(now())
   homeworkTasks HomeworkTask[]
+  Verification Verification?
 }
+model Verification {
+  id         String   @id @default(cuid())
+  userId     String   @unique  // Add @unique here
+  type       String
+  token      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
 
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@index([token])
+  @@index([expiresAt])
+}
 model HomeworkTask {
   id             String    @id @default(cuid())
   userId         String
