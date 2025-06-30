@@ -5,6 +5,7 @@ import { FiUpload, FiMic, FiSend, FiCopy, FiVolume2, FiMicOff } from "react-icon
 import { BsRobot, BsPerson } from "react-icons/bs";
 import { IoMdClose } from "react-icons/io";
 import { authClient } from "@/app/lib/auth-client"
+
 type Message = {
   id: string;
   content: string;
@@ -22,16 +23,17 @@ export default function OCRChatInterface() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [speechSupported, setSpeechSupported] = useState({
-
     synthesis: false,
     recognition: false
   });
+  
   const { 
     data: session, 
-    isPending, //loading state
-    error, //error object
-    refetch //refetch the session
-} = authClient.useSession() 
+    isPending,
+    error,
+    refetch
+  } = authClient.useSession();
+  
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -130,12 +132,10 @@ export default function OCRChatInterface() {
     setMessages(prev => [...prev, newMessage]);
   };
 
-  
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
   
     const trimmedInput = input.trim();
-    // Use either typed input or OCR result
     const extractedText = trimmedInput || (messages.length > 0 && messages[messages.length - 1].isOCR ? messages[messages.length - 1].content : "");
     if (!extractedText) return;
   
@@ -147,7 +147,7 @@ export default function OCRChatInterface() {
     try {
       const payload = {
         userId: session?.user.id,
-        extractedText, // Always a string, never null
+        extractedText,
         reason: ""
       };
   
@@ -169,7 +169,6 @@ export default function OCRChatInterface() {
       setLoading(false);
     }
   };
-  
 
   const toggleSpeech = () => {
     if (isListening) {
@@ -224,12 +223,39 @@ export default function OCRChatInterface() {
     }
   };
 
+  const getUserAvatar = () => {
+    if (session?.user?.image) {
+      return (
+        <img 
+          src={session.user.image} 
+          alt="User avatar" 
+          className="w-6 h-6 rounded-full object-cover"
+          referrerPolicy="no-referrer"
+        />
+      );
+    }
+    return (
+      <div className="w-6 h-6 rounded-full bg-indigo-500 flex items-center justify-center">
+        <BsPerson className="text-white text-sm" />
+      </div>
+    );
+  };
+
   return (
     <div className="flex flex-col h-screen bg-[#f7f7f8]">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 p-4 flex justify-between items-center">
-        <h1 className="text-xl font-semibold text-gray-800">Askelo </h1>
-        
+        <h1 className="text-xl font-semibold text-gray-800">Askelo</h1>
+        {session ? (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600 hidden sm:inline">{session.user.name || session.user.email}</span>
+            {getUserAvatar()}
+          </div>
+        ) : (
+          <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center">
+            <BsPerson className="text-gray-600 text-sm" />
+          </div>
+        )}
       </header>
 
       {/* Chat Container */}
@@ -277,24 +303,22 @@ export default function OCRChatInterface() {
             >
               <div
                 className={`max-w-3xl rounded-lg p-4 relative ${message.sender === "user"
-                  ? "bg-purple-400 text-white"
+                  ? "bg-indigo-100 text-gray-800 border border-indigo-200"
                   : "bg-white border border-gray-200"
                   } shadow-sm`}
               >
                 <div className="flex items-center gap-2 mb-1">
                   {message.sender === "user" ? (
-                    <div className="w-6 h-6 rounded-full bg-indigo-500 flex items-center justify-center">
-                      <BsPerson className="text-white text-sm" />
-                    </div>
+                    getUserAvatar()
                   ) : (
                     <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
                       <BsRobot className="text-white text-sm" />
                     </div>
                   )}
-                  <span className="font-medium text-black">
-                    {message.sender === "user" ? "You" : "Askelo"}
+                  <span className="font-medium text-gray-800">
+                    {message.sender === "user" ? (session?.user.name || "You") : "Askelo"}
                   </span>
-                  <span className="text-xs opacity-70 ml-2">
+                  <span className="text-xs text-gray-500 ml-2">
                     {formatTime(message.timestamp)}
                   </span>
                   {message.isOCR && (
@@ -308,7 +332,7 @@ export default function OCRChatInterface() {
                     </span>
                   )}
                 </div>
-                <p className="whitespace-pre-line text-black mt-2">{message.content}</p>
+                <p className="whitespace-pre-line text-gray-800 mt-2">{message.content}</p>
                 {message.sender === "ai" && (
                   <div className="flex gap-2 mt-3 justify-end">
                     {speechSupported.synthesis && (
@@ -345,7 +369,7 @@ export default function OCRChatInterface() {
                   <IoMdClose />
                 </button>
               </div>
-              <div className="bg-indigo-600text-black text-xs p-2 text-center">
+              <div className="bg-indigo-100 text-indigo-800 text-xs p-2 text-center">
                 Processing image...
               </div>
             </div>
@@ -370,21 +394,18 @@ export default function OCRChatInterface() {
         )}
         {ocrLoading && (
           <div className="flex justify-end">
-            <div className="max-w-3xl rounded-lg p-4 bg-indigo-200 text-white shadow-sm">
+            <div className="max-w-3xl rounded-lg p-4 bg-indigo-100 border border-indigo-200 shadow-sm">
               <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-full bg-indigo-200 flex items-center justify-center">
-                  <BsPerson className="text-white text-sm" />
-                </div>
-                <span className="font-medium">{session ? session?.user.name: 
-                "Guest" }</span>
-                <span className="text-xs bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded ml-auto">
+                {getUserAvatar()}
+                <span className="font-medium">{session?.user.name || "You"}</span>
+                <span className="text-xs bg-indigo-200 text-indigo-800 px-2 py-0.5 rounded ml-auto">
                   Processing Image
                 </span>
               </div>
               <div className="flex space-x-2 mt-3">
-                <div className="w-2 h-2 rounded-full bg-indigo-300 animate-bounce"></div>
-                <div className="w-2 h-2 rounded-full bg-indigo-300 animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                <div className="w-2 h-2 rounded-full bg-indigo-300 animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                <div className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce"></div>
+                <div className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                <div className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0.4s' }}></div>
               </div>
             </div>
           </div>
@@ -401,7 +422,7 @@ export default function OCRChatInterface() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder={isListening ? "Listening... Speak now" : "Type your message or upload an image..."}
-              className="w-full border text-black border-gray-300 rounded-lg py-3 px-4 pr-10 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none max-h-32 bg-white shadow-sm"
+              className="w-full border text-gray-800 border-gray-300 rounded-lg py-3 px-4 pr-10 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none max-h-32 bg-white shadow-sm"
               rows={1}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
