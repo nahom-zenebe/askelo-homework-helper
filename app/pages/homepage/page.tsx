@@ -130,31 +130,38 @@ export default function OCRChatInterface() {
     setMessages(prev => [...prev, newMessage]);
   };
 
+
+  
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim()) return;
-
-    // Add user message
-    addMessage(input, "user", false, isListening);
-    const userInput = input;
+  
+    const trimmedInput = input.trim();
+    if (!trimmedInput && !uploadedImage) return;
+  
+    // Add user message to UI
+    addMessage(trimmedInput, "user", false, isListening);
+    const userInput = trimmedInput;
     setInput("");
     setLoading(true);
-
+  
     try {
-      // Simulate AI response (replace with actual API call)
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      
-      const response = await fetch('/api/ask-ai', {
-       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-         body: JSON.stringify({userId: session?.user.id, message: userInput,reason:input })
-       });
-     const data = await response.json();
-      
-     if (!response.ok) throw new Error(data.error || "AI request failed");
-
-  addMessage(data.task.explanation, "ai");
+      const payload = {
+        userId: session?.user.id,
+        reason: userInput,        // userInput is now treated as reason (optional)
+        extractedText: null       // you can later support extractedText if needed
+      };
+  
+      const response = await fetch("/api/ask-ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+  
+      const data = await response.json();
+  
+      if (!response.ok) throw new Error(data.error || "AI request failed");
+  
+      addMessage(data.task.explanation, "ai");
     } catch (error) {
       console.error("AI error:", error);
       addMessage("Sorry, I encountered an error processing your request.", "ai");
@@ -162,6 +169,7 @@ export default function OCRChatInterface() {
       setLoading(false);
     }
   };
+  
 
   const toggleSpeech = () => {
     if (isListening) {
