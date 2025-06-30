@@ -130,25 +130,25 @@ export default function OCRChatInterface() {
     setMessages(prev => [...prev, newMessage]);
   };
 
-
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
   
     const trimmedInput = input.trim();
-    if (!trimmedInput && !uploadedImage) return;
+    // Use either typed input or OCR result
+    const extractedText = trimmedInput || (messages.length > 0 && messages[messages.length - 1].isOCR ? messages[messages.length - 1].content : "");
+    if (!extractedText) return;
   
     // Add user message to UI
     addMessage(trimmedInput, "user", false, isListening);
-    const userInput = trimmedInput;
     setInput("");
     setLoading(true);
   
     try {
       const payload = {
         userId: session?.user.id,
-        reason: userInput,        // userInput is now treated as reason (optional)
-        extractedText: null       // you can later support extractedText if needed
+        extractedText, // Always a string, never null
+        reason: ""
       };
   
       const response = await fetch("/api/ask-ai", {

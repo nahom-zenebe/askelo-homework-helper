@@ -7,7 +7,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
+model user {
   id            String    @id @default(cuid())
   name          String?
   email         String    @unique
@@ -24,19 +24,19 @@ model Verification {
   expiresAt  DateTime
   createdAt  DateTime @default(now())
 
-  user       User     @relation(fields: [userId], references: [id])
+  user       user     @relation(fields: [userId], references: [id])
 
   @@index([token])
   @@index([expiresAt])
 }
 model HomeworkTask {
   id             String    @id @default(cuid())
-  userId         String
   extractedText  String?
   explanation    String?
   createdAt      DateTime  @default(now())
-  updatedAt      DateTime?  @updatedAt()
-  aiUsedAt       DateTime?  
+  updatedAt      DateTime? @updatedAt
+  aiUsedAt       DateTime?
 
-  user           User      @relation(fields: [userId], references: [id])
+  userId         String
+  user           user      @relation(fields: [userId], references: [id])
 }
