@@ -50,8 +50,6 @@ export default function ProfilePage() {
   const [editForm, setEditForm] = useState({
     name: '',
     email: '',
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    preferredTheme: 'system' as 'light' | 'dark' | 'system'
   });
   const [securityEvents, setSecurityEvents] = useState<SecurityEvent[]>([]);
   const [connectedDevices, setConnectedDevices] = useState<ConnectedDevice[]>([]);
@@ -146,8 +144,7 @@ export default function ProfilePage() {
       setEditForm({
         name: mockProfile.name,
         email: mockProfile.email,
-        timezone: mockProfile.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
-        preferredTheme: mockProfile.preferredTheme
+    
       });
       setConnectedDevices(mockDevices);
       setSecurityEvents(mockEvents);
@@ -172,8 +169,6 @@ export default function ProfilePage() {
       setEditForm({
         name: profile.name,
         email: profile.email,
-        timezone: profile.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
-        preferredTheme: profile.preferredTheme
       });
     }
   };
@@ -188,10 +183,10 @@ export default function ProfilePage() {
         ...profile,
         name: editForm.name,
         email: editForm.email,
-        timezone: editForm.timezone,
-        preferredTheme: editForm.preferredTheme
+       
       } as UserProfile;
-
+      const response = await axios.put(`/api/user/deleteAccount/${session?.user.id}`);
+     
       setProfile(updatedProfile);
       setIsEditing(false);
       toast.success('Profile updated successfully');
@@ -430,41 +425,7 @@ export default function ProfilePage() {
                     )}
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Timezone</label>
-                    {isEditing ? (
-                      <select
-                        value={editForm.timezone}
-                        onChange={(e) => setEditForm({...editForm, timezone: e.target.value})}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700"
-                      >
-                        <option value="America/New_York">Eastern Time (ET)</option>
-                        <option value="America/Chicago">Central Time (CT)</option>
-                        <option value="America/Denver">Mountain Time (MT)</option>
-                        <option value="America/Los_Angeles">Pacific Time (PT)</option>
-                        <option value="UTC">UTC</option>
-                      </select>
-                    ) : (
-                      <div className="px-3 py-2 border border-transparent rounded-lg">{profile.timezone}</div>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Theme Preference</label>
-                    {isEditing ? (
-                      <select
-                        value={editForm.preferredTheme}
-                        onChange={(e) => setEditForm({...editForm, preferredTheme: e.target.value as 'light' | 'dark' | 'system'})}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700"
-                      >
-                        <option value="system">System Default</option>
-                        <option value="light">Light Mode</option>
-                        <option value="dark">Dark Mode</option>
-                      </select>
-                    ) : (
-                      <div className="px-3 py-2 border border-transparent rounded-lg capitalize">{profile.preferredTheme}</div>
-                    )}
-                  </div>
+                
                 </div>
 
                 <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
