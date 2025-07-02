@@ -14,7 +14,10 @@ model user {
   image         String?  
   createdAt     DateTime  @default(now())
   homeworkTasks HomeworkTask[]
-  Verification Verification?
+  Verification  Verification?
+  threads       Thread[]  @relation("UserThreads")
+  message       Message[]
+
 }
 model Verification {
   id         String   @id @default(cuid())
@@ -39,4 +42,34 @@ model HomeworkTask {
 
   userId         String
   user           user      @relation(fields: [userId], references: [id])
+
+  thread         Thread?   @relation("TaskThread", fields: [threadId], references: [id])
+  threadId       String?   @unique
+}
+
+model Thread {
+  id          String      @id @default(cuid())
+  title       String
+  content     String
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime?   @updatedAt
+
+  authorId    String
+  author      user        @relation("UserThreads", fields: [authorId], references: [id])
+
+  task        HomeworkTask? @relation("TaskThread")
+  messages    Message[]
+
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  content   String
+  createdAt DateTime @default(now())
+
+  threadId  String
+  thread    Thread   @relation(fields: [threadId], references: [id])
+
+  userId    String
+  user      user     @relation(fields: [userId], references: [id])
 }

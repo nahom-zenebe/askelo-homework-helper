@@ -435,6 +435,7 @@ export default function OCRChatInterface() {
           </div>
           <div className="overflow-y-auto h-[calc(100%-56px)]">
             <div className="p-4">
+            
               <button
                 onClick={saveCurrentThread}
                 disabled={messages.length === 0}
