@@ -5,7 +5,7 @@ import { FiUpload, FiMic, FiSend, FiCopy, FiVolume2, FiMicOff } from "react-icon
 import { BsRobot, BsPerson } from "react-icons/bs";
 import { IoMdClose } from "react-icons/io";
 import { authClient } from "@/app/lib/auth-client"
-
+import { useRouter } from 'next/navigation';
 type Message = {
   id: string;
   content: string;
@@ -22,6 +22,7 @@ export default function OCRChatInterface() {
   const [ocrLoading, setOcrLoading] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isListening, setIsListening] = useState(false);
+   const router = useRouter();
   const [speechSupported, setSpeechSupported] = useState({
     synthesis: false,
     recognition: false
@@ -248,7 +249,7 @@ export default function OCRChatInterface() {
         <h1 className="text-xl font-semibold text-gray-800">Askelo</h1>
         {session ? (
           <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600 hidden sm:inline">{session.user.name || session.user.email}</span>
+            <span  onClick={() => router.push('/pages/ProfliePage')} className="text-sm text-gray-600 hidden sm:inline">{session.user.name || session.user.email}</span>
             {getUserAvatar()}
           </div>
         ) : (

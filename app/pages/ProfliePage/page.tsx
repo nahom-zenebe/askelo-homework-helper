@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { authClient } from '@/app/lib/auth-client';
 import { FiUser, FiMail, FiLock, FiCalendar, FiGlobe, FiEdit, FiSave, FiX, FiLogOut, FiTrash2, FiShield, FiActivity, FiSmartphone, FiMoon, FiSun } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
-
+import axios from 'axios'
 type UserProfile = {
   id: string;
   name: string;
@@ -59,6 +59,7 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'devices' | 'analytics'>('profile');
   const [isLoading, setIsLoading] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
+
 
   // Initialize profile data
   useEffect(() => {
@@ -159,6 +160,8 @@ export default function ProfilePage() {
     }
   };
 
+
+
   const handleEditProfile = () => {
     setIsEditing(true);
   };
@@ -227,8 +230,10 @@ export default function ProfilePage() {
 
     try {
       setIsLoading(true);
-      // In a real app, this would be an API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      const response = await axios.delete(`/api/user/deleteAccount/${session?.user.id}`);
+
+
       toast.success('Account deleted successfully');
       router.push('/');
     } catch (error) {
