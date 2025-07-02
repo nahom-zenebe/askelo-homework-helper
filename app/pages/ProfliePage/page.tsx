@@ -183,10 +183,15 @@ export default function ProfilePage() {
         ...profile,
         name: editForm.name,
         email: editForm.email,
-       
       } as UserProfile;
-      const response = await axios.put(`/api/user/deleteAccount/${session?.user.id}`);
-     
+      const response = await axios.put(
+        `/api/user/deleteAccount/${session?.user.id}`,
+        {
+          name: editForm.name,
+          email: editForm.email,
+        }
+      );
+      
       setProfile(updatedProfile);
       setIsEditing(false);
       toast.success('Profile updated successfully');

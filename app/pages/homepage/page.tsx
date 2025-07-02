@@ -1,11 +1,12 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import Tesseract from "tesseract.js";
-import { FiUpload, FiMic, FiSend, FiCopy, FiVolume2, FiMicOff } from "react-icons/fi";
+import { FiUpload, FiMic, FiSend, FiCopy, FiVolume2, FiMicOff, FiMenu, FiEdit2, FiTrash2, FiPlus, FiX } from "react-icons/fi";
 import { BsRobot, BsPerson } from "react-icons/bs";
 import { IoMdClose } from "react-icons/io";
 import { authClient } from "@/app/lib/auth-client"
 import { useRouter } from 'next/navigation';
+
 type Message = {
   id: string;
   content: string;
@@ -15,6 +16,14 @@ type Message = {
   timestamp: Date;
 };
 
+type Thread = {
+  id: string;
+  name: string;
+  messages: Message[];
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 export default function OCRChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -22,7 +31,12 @@ export default function OCRChatInterface() {
   const [ocrLoading, setOcrLoading] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isListening, setIsListening] = useState(false);
-   const router = useRouter();
+  const [showThreads, setShowThreads] = useState(false);
+  const [threads, setThreads] = useState<Thread[]>([]);
+  const [editingThreadId, setEditingThreadId] = useState<string | null>(null);
+  const [threadNameInput, setThreadNameInput] = useState("");
+  const router = useRouter();
+  
   const [speechSupported, setSpeechSupported] = useState({
     synthesis: false,
     recognition: false
@@ -40,6 +54,7 @@ export default function OCRChatInterface() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<any>(null);
+  const threadsMenuRef = useRef<HTMLDivElement>(null);
 
   // Check browser speech support
   useEffect(() => {
@@ -76,11 +91,93 @@ export default function OCRChatInterface() {
       };
     }
 
+    // Load sample threads (in a real app, you'd fetch these from your API)
+    const sampleThreads: Thread[] = [
+      {
+        id: '1',
+        name: 'Research Paper Discussion',
+        messages: [
+          {
+            id: '101',
+            content: 'What does this research paper say about neural networks?',
+            sender: 'user',
+            timestamp: new Date(Date.now() - 86400000),
+            isOCR: true
+          },
+          {
+            id: '102',
+            content: 'The paper discusses advancements in convolutional neural networks for image recognition tasks.',
+            sender: 'ai',
+            timestamp: new Date(Date.now() - 86300000)
+          }
+        ],
+        createdAt: new Date(Date.now() - 86400000),
+        updatedAt: new Date(Date.now() - 86300000)
+      },
+      {
+        id: '2',
+        name: 'Receipt Analysis',
+        messages: [
+          {
+            id: '201',
+            content: 'Can you analyze this receipt?',
+            sender: 'user',
+            timestamp: new Date(Date.now() - 43200000),
+            isOCR: true
+          },
+          {
+            id: '202',
+            content: 'This receipt shows purchases totaling $45.67 at a grocery store on March 15th.',
+            sender: 'ai',
+            timestamp: new Date(Date.now() - 43100000)
+          }
+        ],
+        createdAt: new Date(Date.now() - 43200000),
+        updatedAt: new Date(Date.now() - 43100000)
+      },
+      {
+        id: '3',
+        name: 'Historical Document',
+        messages: [
+          {
+            id: '301',
+            content: 'What does this historical document say?',
+            sender: 'user',
+            timestamp: new Date(Date.now() - 21600000),
+            isOCR: true
+          },
+          {
+            id: '302',
+            content: 'The document appears to be a letter from 1892 discussing trade agreements.',
+            sender: 'ai',
+            timestamp: new Date(Date.now() - 21500000)
+          }
+        ],
+        createdAt: new Date(Date.now() - 21600000),
+        updatedAt: new Date(Date.now() - 21500000)
+      }
+    ];
+    setThreads(sampleThreads);
+
     return () => {
       if (recognitionRef.current) {
         recognitionRef.current.stop();
       }
       window.speechSynthesis?.cancel();
+    };
+  }, []);
+
+  // Close threads menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (threadsMenuRef.current && !threadsMenuRef.current.contains(event.target as Node)) {
+        setShowThreads(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
 
@@ -217,6 +314,10 @@ export default function OCRChatInterface() {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  };
+
   const clearUploadedImage = () => {
     setUploadedImage(null);
     if (fileInputRef.current) {
@@ -242,14 +343,72 @@ export default function OCRChatInterface() {
     );
   };
 
+  const saveCurrentThread = () => {
+    if (messages.length === 0) return;
+    
+    const threadName = `Conversation ${threads.length + 1}`;
+    const newThread: Thread = {
+      id: Date.now().toString(),
+      name: threadName,
+      messages: [...messages],
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
+    setThreads(prev => [...prev, newThread]);
+    setShowThreads(true);
+  };
+
+  const loadThread = (threadId: string) => {
+    const thread = threads.find(t => t.id === threadId);
+    if (thread) {
+      setMessages(thread.messages);
+      setShowThreads(false);
+    }
+  };
+
+  const deleteThread = (threadId: string) => {
+    setThreads(prev => prev.filter(t => t.id !== threadId));
+  };
+
+  const startEditingThread = (thread: Thread) => {
+    setEditingThreadId(thread.id);
+    setThreadNameInput(thread.name);
+  };
+
+  const saveThreadName = () => {
+    if (editingThreadId && threadNameInput.trim()) {
+      setThreads(prev => prev.map(t => 
+        t.id === editingThreadId ? { ...t, name: threadNameInput.trim() } : t
+      ));
+      setEditingThreadId(null);
+      setThreadNameInput("");
+    }
+  };
+
+  const cancelEditing = () => {
+    setEditingThreadId(null);
+    setThreadNameInput("");
+  };
+
   return (
     <div className="flex flex-col h-screen bg-[#f7f7f8]">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 p-4 flex justify-between items-center">
-        <h1 className="text-xl font-semibold text-gray-800">Askelo</h1>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setShowThreads(!showThreads)}
+            className="p-2 rounded-lg hover:bg-gray-100 transition"
+          >
+            <FiMenu className="text-gray-600" />
+          </button>
+          <h1 className="text-xl font-semibold text-gray-800">Askelo</h1>
+        </div>
         {session ? (
           <div className="flex items-center gap-2">
-            <span  onClick={() => router.push('/pages/ProfliePage')} className="text-sm text-gray-600 hidden sm:inline">{session.user.name || session.user.email}</span>
+            <span onClick={() => router.push('/pages/ProfliePage')} className="text-sm text-gray-600 hidden sm:inline cursor-pointer hover:text-indigo-600 transition">
+              {session.user.name || session.user.email}
+            </span>
             {getUserAvatar()}
           </div>
         ) : (
@@ -259,8 +418,123 @@ export default function OCRChatInterface() {
         )}
       </header>
 
+      {/* Threads Sidebar */}
+      {showThreads && (
+        <div 
+          ref={threadsMenuRef}
+          className="fixed inset-y-0 left-0 w-64 bg-white shadow-lg z-10 border-r border-gray-200 transform transition-transform duration-300 ease-in-out"
+        >
+          <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+            <h2 className="text-lg font-semibold text-gray-800">Your Threads</h2>
+            <button 
+              onClick={() => setShowThreads(false)}
+              className="p-1 rounded-full hover:bg-gray-100 transition"
+            >
+              <FiX className="text-gray-500" />
+            </button>
+          </div>
+          <div className="overflow-y-auto h-[calc(100%-56px)]">
+            <div className="p-4">
+              <button
+                onClick={saveCurrentThread}
+                disabled={messages.length === 0}
+                className={`w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg mb-4 transition ${messages.length === 0 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
+              >
+                <FiPlus /> Save Current Thread
+              </button>
+              
+              {threads.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <p>No saved threads yet</p>
+                </div>
+              ) : (
+                <ul className="space-y-1">
+                  {threads.map(thread => (
+                    <li 
+                      key={thread.id}
+                      className="group relative"
+                    >
+                      {editingThreadId === thread.id ? (
+                        <div className="p-2 bg-gray-50 rounded-lg">
+                          <input
+                            type="text"
+                            value={threadNameInput}
+                            onChange={(e) => setThreadNameInput(e.target.value)}
+                            className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') saveThreadName();
+                              if (e.key === 'Escape') cancelEditing();
+                            }}
+                          />
+                          <div className="flex justify-end gap-2 mt-2">
+                            <button
+                              onClick={cancelEditing}
+                              className="px-3 py-1 text-sm text-gray-600 hover:bg-gray-100 rounded"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={saveThreadName}
+                              className="px-3 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                            >
+                              Save
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div
+                          onClick={() => loadThread(thread.id)}
+                          className={`p-3 rounded-lg cursor-pointer transition ${messages.length > 0 && messages[0].id === thread.messages[0].id ? 'bg-indigo-50 border border-indigo-100' : 'hover:bg-gray-50'}`}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h3 className="font-medium text-gray-800 truncate">{thread.name}</h3>
+                              <p className="text-xs text-gray-500 mt-1">
+                                {formatDate(thread.updatedAt)} · {thread.messages.length} messages
+                              </p>
+                            </div>
+                            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  startEditingThread(thread);
+                                }}
+                                className="p-1.5 rounded-full hover:bg-gray-200 transition text-gray-500 hover:text-gray-700"
+                                title="Rename thread"
+                              >
+                                <FiEdit2 size={14} />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  deleteThread(thread.id);
+                                }}
+                                className="p-1.5 rounded-full hover:bg-red-100 transition text-gray-500 hover:text-red-600"
+                                title="Delete thread"
+                              >
+                                <FiTrash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                          {thread.messages.length > 0 && (
+                            <p className="text-xs text-gray-500 mt-2 truncate">
+                              {thread.messages[0].content.substring(0, 60)}...
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Chat Container */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className={`flex-1 overflow-y-auto p-4 space-y-4 transition-all duration-300 ${showThreads ? 'ml-64' : 'ml-0'}`}>
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-gray-400">
             <div className="text-center max-w-md">
@@ -415,7 +689,7 @@ export default function OCRChatInterface() {
       </div>
 
       {/* Input Area */}
-      <div className="border-t border-gray-200 p-4 bg-white">
+      <div className={`border-t border-gray-200 p-4 bg-white transition-all duration-300 ${showThreads ? 'ml-64' : 'ml-0'}`}>
         <form onSubmit={handleSubmit} className="flex gap-2">
           <div className="relative flex-1">
             <textarea

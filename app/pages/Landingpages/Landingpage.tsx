@@ -298,7 +298,7 @@ export default function LandingPage() {
               <p className="text-gray-300">
                 Our AI provides step-by-step explanations
               </p>
-            </div>
+                </div>
 
             <div className="bg-[#232B39] rounded-xl p-8 border border-[#181C23] text-center shadow-lg">
               <div className="w-16 h-16 bg-gradient-to-br from-[#2563EB] to-[#1E40AF] rounded-full flex items-center justify-center mx-auto mb-6 text-2xl font-bold text-white shadow">
@@ -384,7 +384,7 @@ export default function LandingPage() {
 
                 <div className="flex items-center">
                   <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#2563EB] to-[#1E40AF] mr-4 overflow-hidden flex items-center justify-center text-blue-200 font-bold shadow">
-                    {testimonial.author.charAt(0)}
+                      {testimonial.author.charAt(0)}
                   </div>
 
                   <div>
