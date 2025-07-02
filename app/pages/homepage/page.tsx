@@ -14,14 +14,17 @@ type Message = {
   isOCR?: boolean;
   isVoice?: boolean;
   timestamp: Date;
+  userId?: string;
 };
 
 type Thread = {
   id: string;
-  name: string;
+  title: string;
   messages: Message[];
   createdAt: Date;
   updatedAt: Date;
+  userId: string;
+  taskId?: string;
 };
 
 export default function OCRChatInterface() {
@@ -35,6 +38,7 @@ export default function OCRChatInterface() {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [editingThreadId, setEditingThreadId] = useState<string | null>(null);
   const [threadNameInput, setThreadNameInput] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   
   const [speechSupported, setSpeechSupported] = useState({
@@ -45,7 +49,7 @@ export default function OCRChatInterface() {
   const { 
     data: session, 
     isPending,
-    error,
+    error: sessionError,
     refetch
   } = authClient.useSession();
   
@@ -91,74 +95,6 @@ export default function OCRChatInterface() {
       };
     }
 
-    // Load sample threads (in a real app, you'd fetch these from your API)
-    const sampleThreads: Thread[] = [
-      {
-        id: '1',
-        name: 'Research Paper Discussion',
-        messages: [
-          {
-            id: '101',
-            content: 'What does this research paper say about neural networks?',
-            sender: 'user',
-            timestamp: new Date(Date.now() - 86400000),
-            isOCR: true
-          },
-          {
-            id: '102',
-            content: 'The paper discusses advancements in convolutional neural networks for image recognition tasks.',
-            sender: 'ai',
-            timestamp: new Date(Date.now() - 86300000)
-          }
-        ],
-        createdAt: new Date(Date.now() - 86400000),
-        updatedAt: new Date(Date.now() - 86300000)
-      },
-      {
-        id: '2',
-        name: 'Receipt Analysis',
-        messages: [
-          {
-            id: '201',
-            content: 'Can you analyze this receipt?',
-            sender: 'user',
-            timestamp: new Date(Date.now() - 43200000),
-            isOCR: true
-          },
-          {
-            id: '202',
-            content: 'This receipt shows purchases totaling $45.67 at a grocery store on March 15th.',
-            sender: 'ai',
-            timestamp: new Date(Date.now() - 43100000)
-          }
-        ],
-        createdAt: new Date(Date.now() - 43200000),
-        updatedAt: new Date(Date.now() - 43100000)
-      },
-      {
-        id: '3',
-        name: 'Historical Document',
-        messages: [
-          {
-            id: '301',
-            content: 'What does this historical document say?',
-            sender: 'user',
-            timestamp: new Date(Date.now() - 21600000),
-            isOCR: true
-          },
-          {
-            id: '302',
-            content: 'The document appears to be a letter from 1892 discussing trade agreements.',
-            sender: 'ai',
-            timestamp: new Date(Date.now() - 21500000)
-          }
-        ],
-        createdAt: new Date(Date.now() - 21600000),
-        updatedAt: new Date(Date.now() - 21500000)
-      }
-    ];
-    setThreads(sampleThreads);
-
     return () => {
       if (recognitionRef.current) {
         recognitionRef.current.stop();
@@ -194,6 +130,35 @@ export default function OCRChatInterface() {
     }
   }, [input]);
 
+  // Fetch threads when session changes
+  useEffect(() => {
+    if (session) {
+      fetchThreads();
+    }
+  }, [session]);
+
+  const fetchThreads = async () => {
+    setError(null);
+    try {
+      const response = await fetch('/api/threads');
+      if (!response.ok) throw new Error('Failed to fetch threads');
+      const data = await response.json();
+      setThreads(data.map((thread: any) => ({
+        ...thread,
+        createdAt: new Date(thread.createdAt),
+        updatedAt: new Date(thread.updatedAt),
+        messages: thread.messages.map((msg: any) => ({
+          ...msg,
+          timestamp: new Date(msg.createdAt),
+          sender: msg.userId === session?.user.id ? 'user' : 'ai'
+        }))
+      })));
+    } catch (error) {
+      setError('Failed to load conversations. Please try again.');
+      console.error('Error fetching threads:', error);
+    }
+  };
+
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -225,7 +190,8 @@ export default function OCRChatInterface() {
       sender,
       isOCR,
       isVoice,
-      timestamp: new Date()
+      timestamp: new Date(),
+      userId: sender === "user" ? session?.user.id : undefined
     };
     setMessages(prev => [...prev, newMessage]);
   };
@@ -235,7 +201,7 @@ export default function OCRChatInterface() {
   
     const trimmedInput = input.trim();
     const extractedText = trimmedInput || (messages.length > 0 && messages[messages.length - 1].isOCR ? messages[messages.length - 1].content : "");
-    if (!extractedText) return;
+    if (!extractedText || !session) return;
   
     // Add user message to UI
     addMessage(trimmedInput, "user", false, isListening);
@@ -243,28 +209,118 @@ export default function OCRChatInterface() {
     setLoading(true);
   
     try {
-      const payload = {
-        userId: session?.user.id,
-        extractedText,
-        reason: ""
-      };
-  
       const response = await fetch("/api/ask-ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          userId: session.user.id,
+          extractedText,
+          reason: ""
+        }),
       });
-  
+
+      if (!response.ok) throw new Error('AI request failed');
+      
       const data = await response.json();
-  
-      if (!response.ok) throw new Error(data.error || "AI request failed");
-  
       addMessage(data.task.explanation, "ai");
+      
+      // If this is the first message, create a new thread
+      if (messages.length === 0) {
+        await saveCurrentThread();
+      }
     } catch (error) {
       console.error("AI error:", error);
       addMessage("Sorry, I encountered an error processing your request.", "ai");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const saveCurrentThread = async () => {
+    if (messages.length === 0 || !session) return;
+    
+    try {
+      const response = await fetch('/api/threads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: `Conversation ${threads.length + 1}`,
+          content: messages[0].content,
+          userId: session.user.id,
+          messages: messages.map(msg => ({
+            content: msg.content,
+            userId: msg.sender === 'user' ? session.user.id : null,
+            isOCR: msg.isOCR,
+            isVoice: msg.isVoice,
+            createdAt: msg.timestamp
+          }))
+        })
+      });
+
+      if (!response.ok) throw new Error('Failed to save thread');
+      
+      const newThread = await response.json();
+      setThreads(prev => [...prev, {
+        ...newThread,
+        createdAt: new Date(newThread.createdAt),
+        updatedAt: new Date(newThread.updatedAt),
+        messages: newThread.messages.map((msg: any) => ({
+          ...msg,
+          timestamp: new Date(msg.createdAt),
+          sender: msg.userId === session.user.id ? 'user' : 'ai'
+        }))
+      }]);
+      setShowThreads(true);
+    } catch (error) {
+      console.error('Error saving thread:', error);
+    }
+  };
+
+  const loadThread = async (threadId: string) => {
+    try {
+      const response = await fetch(`/api/threads/${threadId}`);
+      if (!response.ok) throw new Error('Failed to fetch thread');
+      
+      const thread = await response.json();
+      setMessages(thread.messages.map((msg: any) => ({
+        ...msg,
+        timestamp: new Date(msg.createdAt),
+        sender: msg.userId === session?.user.id ? 'user' : 'ai'
+      })));
+      setShowThreads(false);
+    } catch (error) {
+      console.error('Error loading thread:', error);
+    }
+  };
+
+  const deleteThread = async (threadId: string) => {
+    try {
+      const response = await fetch(`/api/threads/${threadId}`, {
+        method: 'DELETE'
+      });
+      
+      if (!response.ok) throw new Error('Failed to delete thread');
+      setThreads(prev => prev.filter(t => t.id !== threadId));
+    } catch (error) {
+      console.error('Error deleting thread:', error);
+    }
+  };
+
+  const updateThreadTitle = async (threadId: string, newTitle: string) => {
+    try {
+      const response = await fetch(`/api/threads/${threadId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: newTitle })
+      });
+      
+      if (!response.ok) throw new Error('Failed to update thread');
+      setThreads(prev => prev.map(t => 
+        t.id === threadId ? { ...t, title: newTitle } : t
+      ));
+      setEditingThreadId(null);
+    } catch (error) {
+      console.error('Error updating thread:', error);
     }
   };
 
@@ -343,47 +399,9 @@ export default function OCRChatInterface() {
     );
   };
 
-  const saveCurrentThread = () => {
-    if (messages.length === 0) return;
-    
-    const threadName = `Conversation ${threads.length + 1}`;
-    const newThread: Thread = {
-      id: Date.now().toString(),
-      name: threadName,
-      messages: [...messages],
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-    
-    setThreads(prev => [...prev, newThread]);
-    setShowThreads(true);
-  };
-
-  const loadThread = (threadId: string) => {
-    const thread = threads.find(t => t.id === threadId);
-    if (thread) {
-      setMessages(thread.messages);
-      setShowThreads(false);
-    }
-  };
-
-  const deleteThread = (threadId: string) => {
-    setThreads(prev => prev.filter(t => t.id !== threadId));
-  };
-
   const startEditingThread = (thread: Thread) => {
     setEditingThreadId(thread.id);
-    setThreadNameInput(thread.name);
-  };
-
-  const saveThreadName = () => {
-    if (editingThreadId && threadNameInput.trim()) {
-      setThreads(prev => prev.map(t => 
-        t.id === editingThreadId ? { ...t, name: threadNameInput.trim() } : t
-      ));
-      setEditingThreadId(null);
-      setThreadNameInput("");
-    }
+    setThreadNameInput(thread.title);
   };
 
   const cancelEditing = () => {
@@ -464,7 +482,9 @@ export default function OCRChatInterface() {
                             className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             autoFocus
                             onKeyDown={(e) => {
-                              if (e.key === 'Enter') saveThreadName();
+                              if (e.key === 'Enter') {
+                                updateThreadTitle(thread.id, threadNameInput);
+                              }
                               if (e.key === 'Escape') cancelEditing();
                             }}
                           />
@@ -476,7 +496,7 @@ export default function OCRChatInterface() {
                               Cancel
                             </button>
                             <button
-                              onClick={saveThreadName}
+                              onClick={() => updateThreadTitle(thread.id, threadNameInput)}
                               className="px-3 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700"
                             >
                               Save
@@ -486,13 +506,13 @@ export default function OCRChatInterface() {
                       ) : (
                         <div
                           onClick={() => loadThread(thread.id)}
-                          className={`p-3 rounded-lg cursor-pointer transition ${messages.length > 0 && messages[0].id === thread.messages[0].id ? 'bg-indigo-50 border border-indigo-100' : 'hover:bg-gray-50'}`}
+                          className={`p-3 rounded-lg cursor-pointer transition ${messages.length > 0 && messages[0].id === thread.messages[0]?.id ? 'bg-indigo-50 border border-indigo-100' : 'hover:bg-gray-50'}`}
                         >
                           <div className="flex justify-between items-start">
                             <div>
-                              <h3 className="font-medium text-gray-800 truncate">{thread.name}</h3>
+                              <h3 className="font-medium text-gray-800 truncate">{thread.title}</h3>
                               <p className="text-xs text-gray-500 mt-1">
-                                {formatDate(thread.updatedAt)} · {thread.messages.length} messages
+                                {formatDate(new Date(thread.updatedAt))} · {thread.messages.length} messages
                               </p>
                             </div>
                             <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
@@ -743,6 +763,19 @@ export default function OCRChatInterface() {
           </button>
         </form>
       </div>
+
+      {/* Error message */}
+      {error && (
+        <div className="fixed bottom-4 right-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded flex items-center gap-2">
+          <span>{error}</span>
+          <button 
+            onClick={() => setError(null)} 
+            className="p-1 hover:bg-red-200 rounded-full"
+          >
+            <FiX />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
