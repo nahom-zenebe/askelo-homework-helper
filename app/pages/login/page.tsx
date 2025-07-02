@@ -4,7 +4,7 @@ import { useState } from "react";
 import { authClient } from "@/app/lib/auth-client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-
+import { ToastContainer, toast } from 'react-toastify';
 export default function LoginPage() {
   const router = useRouter();
 
@@ -39,6 +39,7 @@ export default function LoginPage() {
         },
       }
     );
+    toast("Login successful")
   };
 
   return (
@@ -114,8 +115,9 @@ export default function LoginPage() {
 
           <div className="mt-4 grid grid-cols-2 gap-3">
             <button
-              onClick={() =>
+              onClick={() =>{
                 authClient.signIn.social("google", { callbackURL: "/pages/homepage" })
+                toast("Login successful")}
               }
               type="button"
               className="flex items-center justify-center w-full border border-gray-300 rounded-lg py-2 bg-white hover:bg-gray-50"

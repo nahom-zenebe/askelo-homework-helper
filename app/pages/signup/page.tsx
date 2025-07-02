@@ -5,7 +5,8 @@ import { useState } from "react";
 import { authClient } from "@/app/lib/auth-client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-
+import { ToastContainer, toast } from 'react-toastify';
+  
 export default function SignupPage() {
   const [formData, setFormData] = useState({ name: "", email: "", password: "" });
   const [error, setError] = useState("");
@@ -38,12 +39,16 @@ export default function SignupPage() {
         },
       }
     );
+     toast("signup successful")
   };
   const handleGoogleSignup = () => {
+
+   
     authClient.signIn.social({
       provider: "google",
       callbackURL: "/pages/homepage",
     });
+    toast("signup successful")
   };
   
   return (
